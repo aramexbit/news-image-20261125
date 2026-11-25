@@ -1,0 +1,8 @@
+# Build outputs and local check artefacts stay out of the repository.
+# out/ is the default output directory main.py writes to. The program
+# clears the contents of out/ on each run but never removes the folder
+# itself. Nothing else is ignored.
+# (assets/prebuilt.png is the Pillow fallback image; it is committed.)
+out/
+__pycache__/
+*.pyc
