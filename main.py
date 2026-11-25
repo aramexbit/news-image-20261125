@@ -61,7 +61,7 @@ NUMBERS = [
     ("490,334", "Russian soldiers dead, per leaked data"),
     ("4.3%", "US Q3 GDP growth, revised up"),
     ("20%", "top tariff rate proposed on China"),
-    ("9,500", "pounds of lead azide detonated"),
+    ("9,700", "pounds of lead azide detonated"),
 ]
 
 UTC_EVENTS = [
@@ -71,7 +71,7 @@ UTC_EVENTS = [
     "Senate passes duty of care",
 ]
 
-SUB_LINE = "Shenzhou-24 carries Pakistan's first astronaut to orbit \u00b7 Trump unveils tariffs on 14 partners \u00b7 Iowa detonates 9,500 lbs of lead azide"
+SUB_LINE = "Shenzhou-24 carries Pakistan's first astronaut to orbit \u00b7 Trump proposes tariffs on 14 partners \u00b7 Iowa detonates 9,700 lbs of lead azide"
 STATS_LINE = "20 STORIES \u00b7 6 REGIONS \u00b7 EVERY ONE DATED WEDNESDAY 25 NOVEMBER 2026"
 
 DATE_CHECK_TEXT = (
@@ -108,15 +108,15 @@ LEADS = [
     {
         "num": 10, "kicker": "TARIFFS ON 14 PARTNERS",
         "place": "WASHINGTON", "beat": "TRADE", "tag": "CONFIRMED",
-        "headline": "Trump unveils new tariffs on 14 trading partners",
+        "headline": "Trump proposes new tariffs on 14 trading partners",
         "deck": "China faces 20% \u2014 40% if the trade truce unravels; India 17-25%, "
                 "EU, Japan and Korea 15%.",
         "source": "Reuters", "art": "tariff",
     },
     {
-        "num": 7, "kicker": "9,500 LBS DETONATED",
+        "num": 7, "kicker": "9,700 LBS DETONATED",
         "place": "MIDDLETOWN, IOWA", "beat": "EXPLOSION", "tag": "CONFIRMED",
-        "headline": "Army detonates 9,500 lbs of unstable lead azide",
+        "headline": "Army detonates 9,700 lbs of unstable lead azide",
         "deck": "68 barrels go up at 09:00 CST; EPA monitors read 0.0 lead; the "
                 "Army calls it a huge success.",
         "source": "Des Moines Register, USA Today", "art": "blast",
@@ -165,12 +165,12 @@ NINE = [
 # (num, place, body, source, region)
 BRIEFS = [
     (13, "Gaza City", "Israel kills Hamas colonel Abuelouf, his wife and two children.", "Just Security", "ME"),
-    (14, "Cape Town", "High Court sets aside Phala Phala report; Ramaphosa inquiry ends.", "Cape Times", "AF"),
+    (14, "Cape Town", "High Court voids Phala Phala report; impeachment inquiry ends.", "Cape Times", "AF"),
     (15, "Vatican City", "Pope Leo XIV voices concern over the failure of COP31.", "AP", "EU"),
-    (16, "Syzran", "Drones hit industrial sites; 1 killed, 145 downed. Refinery hits unconfirmed.", "Reuters", "EU"),
+    (16, "Samara region", "Syzran hit; 1 killed in Samara city, 145 down. Refinery unproven.", "Reuters", "EU"),
     (17, "Cartagena", "Troops free all hostages in \u00c9xito supermarket siege; one captor killed.", "Wires", "AM"),
     (18, "Madrid", "Kilmar Abrego Garcia arrives after leaving the US voluntarily.", "Reuters", "EU"),
-    (19, "New York", "AI sell-off sinks Wall Street: Nasdaq -3.2%, S&P 500 -2.2%, Dow -472.", "AP", "AM"),
+    (19, "New York", "AI sell-off sinks Wall Street: Nasdaq -3.2%, S&P 500 -2.2%, Dow -472 pts.", "AP", "AM"),
     (20, "Jeddah", "Houthis threaten Jeddah and Saudi Red Sea ports if Hodeidah is hit.", "Reuters", "ME"),
 ]
 
@@ -217,21 +217,26 @@ CONTINENTS = [
     [(44, -16), (47, -15), (50, -16), (49, -20), (45, -25), (43, -22), (44, -16)],
 ]
 
-# (num, lon, lat, nudge_x, nudge_y) — nudges are small on purpose: the
-# draw loop clamps every pin inside the map frame, but a pin should
-# never need the clamp. Canberra (3, 4, 5, 8) shares one projected
-# point, so the four pins spread in a small diamond around it.
+# (num, lon, lat, nudge_x, nudge_y) — v3: every pin sits at its true
+# lat/lon under the map's equirectangular projection (330 px = 360 deg
+# lon, 100 px = 144 deg lat). Nudges only spread pins that genuinely
+# collide at true positions, and only horizontally: 1 px of longitude
+# costs ~1.1 deg, but 1 px of latitude costs ~1.44 deg, so vertical
+# nudges would move a pin further from its real place. Canberra
+# (3, 4, 5, 8) shares one projected point, so the four pins spread in
+# a small diamond around it. The draw loop still clamps every pin
+# inside the map frame, but no pin needs the clamp.
 DOTS = [
-    (1, 98.5, 40.9, 25, -10), (2, 127.0, 37.5, 8, 0),
+    (1, 98.5, 39.8, 0, 0), (2, 127.0, 37.5, 0, 0),
     (3, 149.1, -35.3, 0, -8), (4, 149.1, -35.3, -22, 2),
-    (5, 149.1, -35.3, 16, 2), (6, 37.6, 55.75, 24, -10),
-    (7, -91.4, 40.8, -18, -12), (8, 149.1, -35.3, 0, 8),
-    (9, -77.0, 38.9, 3, 11), (10, -77.0, 38.9, 24, -8),
-    (11, 56.3, 26.6, 10, -14), (12, 50.1, 26.6, -14, 14),
-    (13, 34.45, 31.5, -15, 25), (14, 18.4, -33.9, 4, -4),
-    (15, 12.45, 41.9, -2, 0), (16, 50.2, 53.2, 0, 0),
-    (17, -75.5, 10.4, -20, 4), (18, -3.7, 40.4, -6, 4),
-    (19, -74.0, 40.7, 0, -12), (20, 39.2, 21.5, 8, -6),
+    (5, 149.1, -35.3, 16, 2), (6, 37.6, 55.75, -8, 0),
+    (7, -91.3, 40.8, 0, 0), (8, 149.1, -35.3, 0, 8),
+    (9, -77.0, 38.9, 3, 4), (10, -77.0, 38.9, 18, -4),
+    (11, 56.3, 26.6, 9, 0), (12, 50.0, 26.6, 1, 0),
+    (13, 34.45, 31.5, -5, 0), (14, 18.4, -33.9, 4, -4),
+    (15, 12.45, 41.9, 0, 0), (16, 50.2, 53.2, 6, 0),
+    (17, -75.5, 10.4, -12, 0), (18, -3.7, 40.4, 0, 0),
+    (19, -74.0, 40.7, 0, -6), (20, 39.2, 21.5, 0, 0),
 ]
 
 FONT_DIR = "/usr/share/fonts/truetype/dejavu"
