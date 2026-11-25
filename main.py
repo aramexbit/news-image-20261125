@@ -169,7 +169,7 @@ BRIEFS = [
     (15, "Vatican City", "Pope Leo XIV voices concern over the failure of COP31.", "AP", "EU"),
     (16, "Samara region", "Syzran hit; 1 killed in Samara city, 145 down. Refinery unproven.", "Reuters", "EU"),
     (17, "Cartagena", "Troops free all hostages in \u00c9xito supermarket siege; one captor killed.", "Wires", "AM"),
-    (18, "Madrid", "Kilmar Abrego Garcia arrives after leaving the US voluntarily.", "Reuters", "EU"),
+    (18, "Madrid", "Kilmar Abrego Garcia arrives Wednesday after leaving the US.", "Reuters", "EU"),
     (19, "New York", "AI sell-off sinks Wall Street: Nasdaq -3.2%, S&P 500 -2.2%, Dow -472 pts.", "AP", "AM"),
     (20, "Jeddah", "Houthis threaten Jeddah and Saudi Red Sea ports if Hodeidah is hit.", "Reuters", "ME"),
 ]
@@ -217,25 +217,31 @@ CONTINENTS = [
     [(44, -16), (47, -15), (50, -16), (49, -20), (45, -25), (43, -22), (44, -16)],
 ]
 
-# (num, lon, lat, nudge_x, nudge_y) — v3: every pin sits at its true
+# (num, lon, lat, nudge_x, nudge_y) — v4: every pin sits at its true
 # lat/lon under the map's equirectangular projection (330 px = 360 deg
-# lon, 100 px = 144 deg lat). Nudges only spread pins that genuinely
-# collide at true positions, and only horizontally: 1 px of longitude
-# costs ~1.1 deg, but 1 px of latitude costs ~1.44 deg, so vertical
-# nudges would move a pin further from its real place. Canberra
+# lon, 100 px = 144 deg lat), with nudges capped at 6 px. Nudges only
+# spread pins that genuinely collide at true positions. Canberra
 # (3, 4, 5, 8) shares one projected point, so the four pins spread in
-# a small diamond around it. The draw loop still clamps every pin
-# inside the map frame, but no pin needs the clamp.
+# a tight diamond (0,-6),(-6,0),(6,0),(0,6) around it — each pair
+# 8.5 px apart, just clear of the 4 px radii. The US east coast trio
+# (9, 10, 19) shares two nearly identical true points, so 9 goes
+# (-5,3), 10 goes (5,3), 19 goes (0,-6): measured pairwise clearances
+# 9-10: 10.0 px, 10-19: 10.5 px, 9-19: 11.4 px, with no pin more than
+# 6 px from true. Gulf trio (11, 12, 20) and Gaza (13) are spread the
+# same way: 11 (5,0), 13 (-4,0); measured 11-12: 10.8 px, 12-20:
+# 10.5 px, 13-20: 10.9 px. Max displacement anywhere is exactly
+# 6.0 px; zero circle overlaps; the draw loop still clamps every pin
+# inside the map frame, but no pin needs it.
 DOTS = [
     (1, 98.5, 39.8, 0, 0), (2, 127.0, 37.5, 0, 0),
-    (3, 149.1, -35.3, 0, -8), (4, 149.1, -35.3, -22, 2),
-    (5, 149.1, -35.3, 16, 2), (6, 37.6, 55.75, -8, 0),
-    (7, -91.3, 40.8, 0, 0), (8, 149.1, -35.3, 0, 8),
-    (9, -77.0, 38.9, 3, 4), (10, -77.0, 38.9, 18, -4),
-    (11, 56.3, 26.6, 9, 0), (12, 50.0, 26.6, 1, 0),
-    (13, 34.45, 31.5, -5, 0), (14, 18.4, -33.9, 4, -4),
-    (15, 12.45, 41.9, 0, 0), (16, 50.2, 53.2, 6, 0),
-    (17, -75.5, 10.4, -12, 0), (18, -3.7, 40.4, 0, 0),
+    (3, 149.1, -35.3, 0, -6), (4, 149.1, -35.3, -6, 0),
+    (5, 149.1, -35.3, 6, 0), (6, 37.6, 55.75, 0, 0),
+    (7, -91.3, 40.8, 0, 0), (8, 149.1, -35.3, 0, 6),
+    (9, -77.0, 38.9, -5, 3), (10, -77.0, 38.9, 5, 3),
+    (11, 56.3, 26.6, 5, 0), (12, 50.0, 26.6, 0, 0),
+    (13, 34.45, 31.5, -4, 0), (14, 18.4, -33.9, 0, 0),
+    (15, 12.45, 41.9, 0, 0), (16, 50.2, 53.2, 0, 0),
+    (17, -75.5, 10.4, 0, 0), (18, -3.7, 40.4, 0, 0),
     (19, -74.0, 40.7, 0, -6), (20, 39.2, 21.5, 0, 0),
 ]
 
