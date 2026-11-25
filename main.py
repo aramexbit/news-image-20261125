@@ -50,8 +50,8 @@ REGION_COLOURS = {
 
 REGIONS = [
     ("EUROPE", 4),
-    ("MIDDLE EAST", 3),
-    ("ASIA-PACIFIC", 3),
+    ("MIDDLE EAST", 4),
+    ("ASIA-PACIFIC", 2),
     ("AMERICAS", 5),
     ("AFRICA", 1),
     ("OCEANIA", 4),
@@ -81,7 +81,9 @@ DATE_CHECK_TEXT = (
     "confidence (24 Nov) \u00b7 Democrats' 259 seats (24 Nov) \u00b7 Nvidia's "
     "fall (24 Nov) \u00b7 quasar discovery (24 Nov) \u00b7 WHO Ebola evacuation "
     "(24 Nov) \u00b7 Vance and Rubio meet Qatar's PM (23 Nov) \u00b7 Gaza strikes "
-    "of 24 Nov \u00b7 Dow above 50,000 (24 Nov)."
+    "of 24 Nov \u00b7 Dow above 50,000 (24 Nov) \u00b7 Sudan RSF strikes "
+    "(24 Nov) \u00b7 Bogor mine flood (23 Nov) \u00b7 Dell Q3 (24 Nov) \u00b7 "
+    "Poland US-troops push (24 Nov)."
 )
 
 FOOTER_1 = (
@@ -163,13 +165,13 @@ NINE = [
 # (num, place, body, source, region)
 BRIEFS = [
     (13, "Gaza City", "Israel kills Hamas colonel Abuelouf, his wife and two children.", "Just Security", "ME"),
-    (14, "Khartoum", "RSF drone strikes kill 19 civilians, wound 20 in two cities.", "Just Security", "AF"),
+    (14, "Cape Town", "High Court sets aside Phala Phala report; Ramaphosa inquiry ends.", "Cape Times", "AF"),
     (15, "Vatican City", "Pope Leo XIV voices concern over the failure of COP31.", "AP", "EU"),
-    (16, "Syzran", "Ukrainian drones hit two Rosneft refineries; one killed.", "Wires", "EU"),
+    (16, "Syzran", "Drones hit industrial sites; 1 killed, 145 downed. Refinery hits unconfirmed.", "Reuters", "EU"),
     (17, "Cartagena", "Troops free all hostages in \u00c9xito supermarket siege; one captor killed.", "Wires", "AM"),
-    (18, "Bogor", "Flooded illegal gold mine: toll reaches six, about 20 miners still trapped.", "Wires", "APAC"),
-    (19, "Round Rock", "Dell posts record Q3: revenue $54.9B, AI servers $22B.", "Wires", "AM"),
-    (20, "Warsaw", "Poland pushes for a permanent US military presence.", "Wires", "EU"),
+    (18, "Madrid", "Kilmar Abrego Garcia arrives after leaving the US voluntarily.", "Reuters", "EU"),
+    (19, "New York", "AI sell-off sinks Wall Street: Nasdaq -3.2%, S&P 500 -2.2%, Dow -472.", "AP", "AM"),
+    (20, "Jeddah", "Houthis threaten Jeddah and Saudi Red Sea ports if Hodeidah is hit.", "Reuters", "ME"),
 ]
 
 CONTINENTS = [
@@ -215,18 +217,21 @@ CONTINENTS = [
     [(44, -16), (47, -15), (50, -16), (49, -20), (45, -25), (43, -22), (44, -16)],
 ]
 
-# (num, lon, lat, nudge_x, nudge_y)
+# (num, lon, lat, nudge_x, nudge_y) — nudges are small on purpose: the
+# draw loop clamps every pin inside the map frame, but a pin should
+# never need the clamp. Canberra (3, 4, 5, 8) shares one projected
+# point, so the four pins spread in a small diamond around it.
 DOTS = [
     (1, 98.5, 40.9, 25, -10), (2, 127.0, 37.5, 8, 0),
-    (3, 149.1, -35.3, 0, -3), (4, 149.1, -35.3, -24, 8),
-    (5, 149.1, -35.3, 24, 10), (6, 37.6, 55.75, 20, -15),
-    (7, -91.4, 40.8, -18, -12), (8, 149.1, -35.3, 0, 24),
+    (3, 149.1, -35.3, 0, -8), (4, 149.1, -35.3, -22, 2),
+    (5, 149.1, -35.3, 16, 2), (6, 37.6, 55.75, 24, -10),
+    (7, -91.4, 40.8, -18, -12), (8, 149.1, -35.3, 0, 8),
     (9, -77.0, 38.9, 3, 11), (10, -77.0, 38.9, 24, -8),
     (11, 56.3, 26.6, 10, -14), (12, 50.1, 26.6, -14, 14),
-    (13, 34.45, 31.5, -15, 25), (14, 32.5, 15.6, 20, 9),
-    (15, 12.45, 41.9, -2, 0), (16, 48.5, 53.2, 12, -8),
-    (17, -75.5, 10.4, -20, 4), (18, 106.8, -6.6, 10, 12),
-    (19, -97.7, 30.5, -16, 10), (20, 21.0, 52.2, 14, -10),
+    (13, 34.45, 31.5, -15, 25), (14, 18.4, -33.9, 4, -4),
+    (15, 12.45, 41.9, -2, 0), (16, 50.2, 53.2, 0, 0),
+    (17, -75.5, 10.4, -20, 4), (18, -3.7, 40.4, -6, 4),
+    (19, -74.0, 40.7, 0, -12), (20, 39.2, 21.5, 8, -6),
 ]
 
 FONT_DIR = "/usr/share/fonts/truetype/dejavu"
@@ -622,6 +627,12 @@ def build_page():
         px += nx
         py += ny
         r = 5 if num >= 10 else 4
+        # Clamp the whole pin (radius + 2 px margin) inside the frame so
+        # no pin ever touches or crosses the map border, whatever the
+        # nudge says. The number sits inside the pin, so it is clamped
+        # along with it.
+        px = min(max(px, mx + r + 2), mx + mw - r - 2)
+        py = min(max(py, my + r + 2), my + mh - r - 2)
         d.ellipse([px - r, py - r, px + r, py + r], fill=RED, outline=NAVY, width=1)
         d.text((px, py), str(num), font=_font(8 if num >= 10 else 7, "sans_bold"),
                fill=WHITE, anchor="mm")

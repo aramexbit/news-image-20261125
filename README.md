@@ -21,7 +21,14 @@ collapse (22 Nov), the Huawei verdict, the Houthi strike on Riyadh, US
 consumer confidence, the Democrats' 259 seats, Nvidia's fall, the quasar
 discovery, the WHO Ebola evacuation and the Gaza strikes of 24 Nov, and
 the Vance–Rubio meeting with Qatar's PM (23 Nov) are all listed in the
-DATE CHECK box as left out on purpose. The layout is a newspaper front
+DATE CHECK box as left out on purpose. Four more were thrown out in v2
+after a blind review caught their dates: the Sudan RSF strikes, the Dell
+results and the Poland troop push (all 24 Nov) and the Bogor mine flood
+(23 Nov) — replaced by the Phala Phala ruling in Cape Town, Abrego
+Garcia's arrival in Madrid, the Wall Street slide and the Houthi threat
+to Jeddah, all dated Wednesday 25 November 2026. The same v2 pass fixed
+the world map: every pin is now clamped inside the map frame, after the
+blind review found pins crossing the border in v1. The layout is a newspaper front
 page: three lead stories, nine more in cards, a world map with all 20
 stories pinned, and eight briefs — no empty cells anywhere.
 
