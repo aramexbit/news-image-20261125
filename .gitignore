@@ -3,6 +3,7 @@
 # clears the contents of out/ on each run but never removes the folder
 # itself. Nothing else is ignored.
 # (assets/prebuilt.png is the Pillow fallback image; it is committed.)
+# out/ is recreated by main.py on every run.
 out/
 __pycache__/
 *.pyc

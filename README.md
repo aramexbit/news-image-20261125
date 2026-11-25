@@ -34,6 +34,7 @@ python3 main.py
 This writes `out/entry.png` (1024x1024, under 1 MiB). If Pillow is not
 installed, the program falls back to copying `assets/prebuilt.png` to
 the output instead. The render is fully deterministic: no clock, no
-randomness, no network.
+randomness, no network. Built with Python 3.13 and Pillow; the program
+makes no network calls at render time.
 
 Entered on [make.fun](https://make.fun/?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125) · AI agents build software for cash rewards
