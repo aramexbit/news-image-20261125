@@ -250,11 +250,12 @@ _FONT_CACHE = {}
 
 
 def _font(size, kind):
-    key = (size, kind)
-    if key in _FONT_CACHE:
-        return _FONT_CACHE[key]
+    slot = (size, kind)
+    hit = _FONT_CACHE.get(slot)
+    if hit is not None:
+        return hit
     from PIL import ImageFont
-    names = {
+    faces = {
         "serif_bold": "DejaVuSerif-Bold.ttf",
         "serif": "DejaVuSerif.ttf",
         "serif_italic": "DejaVuSerif-Italic.ttf",
@@ -262,236 +263,299 @@ def _font(size, kind):
         "sans_bold": "DejaVuSans-Bold.ttf",
     }
     try:
-        f = ImageFont.truetype(os.path.join(FONT_DIR, names[kind]), int(round(size)))
+        made = ImageFont.truetype(os.path.join(FONT_DIR, faces[kind]), int(round(size)))
     except Exception:
-        f = ImageFont.load_default()
-    _FONT_CACHE[key] = f
-    return f
+        made = ImageFont.load_default()
+    _FONT_CACHE[slot] = made
+    return made
 
 
 def _wrap(text, font, width):
-    lines = []
-    for chunk in text.split("\n"):
-        words = chunk.split()
+    out = []
+    for piece in text.split("\n"):
+        words = piece.split()
         if not words:
-            lines.append("")
+            out.append("")
             continue
-        cur = words[0]
-        for word in words[1:]:
-            trial = cur + " " + word
-            if font.getlength(trial) <= width:
-                cur = trial
+        line = words[0]
+        pos = 1
+        while pos < len(words):
+            longer = line + " " + words[pos]
+            if font.getlength(longer) <= width:
+                line = longer
             else:
-                lines.append(cur)
-                cur = word
-        lines.append(cur)
-    return lines
+                out.append(line)
+                line = words[pos]
+            pos += 1
+        out.append(line)
+    return out
+
+
+def _shrink_to_fit(tail, font, width):
+    while tail and font.getlength(tail + " ...") > width:
+        if " " in tail:
+            tail = tail.rsplit(" ", 1)[0]
+        else:
+            tail = tail[:-1]
+    return tail + " ..."
 
 
 def _fit_lines(text, font, width, max_lines):
-    lines = _wrap(text, font, width)
-    if len(lines) <= max_lines:
-        return lines
-    lines = lines[:max_lines]
-    last = lines[-1]
-    while last and font.getlength(last + " ...") > width:
-        if " " in last:
-            last = last.rsplit(" ", 1)[0]
-        else:
-            last = last[:-1]
-    lines[-1] = last + " ..."
-    return lines
+    wrapped = _wrap(text, font, width)
+    if len(wrapped) <= max_lines:
+        return wrapped
+    kept = wrapped[:max_lines]
+    kept[-1] = _shrink_to_fit(kept[-1], font, width)
+    return kept
 
 
 def _trunc_one(text, font, width):
     if font.getlength(text) <= width:
         return text
-    words = text.split()
-    out = ""
-    for word in words:
-        trial = (out + " " + word).strip()
-        if font.getlength(trial + " ...") <= width:
-            out = trial
+    built = ""
+    for word in text.split():
+        attempt = (built + " " + word).strip()
+        if font.getlength(attempt + " ...") <= width:
+            built = attempt
         else:
             break
-    return out + " ..." if out else text[:4] + " ..."
+    return built + " ..." if built else text[:4] + " ..."
 
 
-def _chip_width(label, size=8):
+def _tag_span(label, size=8):
     return int(_font(size, "sans_bold").getlength(label)) + 10
 
 
-def _chip(draw, x, y, label, colour, height=13, size=8):
-    font = _font(size, "sans_bold")
-    w = int(font.getlength(label)) + 10
-    draw.rounded_rectangle([x, y, x + w, y + height], radius=6, fill=colour)
-    draw.text((x + w / 2, y + height / 2), label, font=font, fill=WHITE, anchor="mm")
-    return w
+def _tag_chip(d, x, y, label, colour, height=13, size=8):
+    face = _font(size, "sans_bold")
+    span = int(face.getlength(label)) + 10
+    d.rounded_rectangle([x, y, x + span, y + height], radius=6, fill=colour)
+    d.text((x + span / 2, y + height / 2), label, font=face, fill=WHITE, anchor="mm")
+    return span
+
+
+def _fill_rect(d, x, y, w, h, colour):
+    d.rectangle([x, y, x + w, y + h], fill=colour)
+
+
+def _disc(d, cx, cy, r, colour):
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=colour)
+
+
+def _ring_disc(d, cx, cy, r, colour, outline):
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=colour, outline=outline, width=1)
+
+
+def _seg(d, x1, y1, x2, y2, colour, width=1):
+    d.line([x1, y1, x2, y2], fill=colour, width=width)
+
+
+def _poly(d, points, colour):
+    d.polygon(points, fill=colour)
+
+
+def _polyline(d, points, colour):
+    d.line(points + [points[0]], fill=colour, width=1)
+
+
+def _slot_row(total, count, gap, start):
+    base = (total - gap * (count - 1)) // count
+    slots = []
+    pos = start
+    for i in range(count):
+        wide = base if i < count - 1 else total - (count - 1) * (base + gap)
+        slots.append((pos, wide))
+        pos += base + gap
+    return slots
 
 
 # ---------------------------------------------------------------- illustrations
 
 def _draw_rocket(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=NAVY_DARK)
-    for sx, sy in ((0.08, 0.12), (0.2, 0.06), (0.35, 0.18), (0.55, 0.08),
-                   (0.7, 0.16), (0.85, 0.06), (0.45, 0.24), (0.15, 0.3),
-                   (0.9, 0.25), (0.62, 0.3)):
-        d.ellipse([x + w * sx - 1, y + h * sy - 1, x + w * sx + 1, y + h * sy + 1],
-                  fill=WHITE)
-    d.ellipse([x + w - 52, y + 8, x + w - 22, y + 38], fill=(240, 235, 210))
+    _fill_rect(d, x, y, w, h, NAVY_DARK)
+    stars = [(0.08, 0.12), (0.2, 0.06), (0.35, 0.18), (0.55, 0.08),
+             (0.7, 0.16), (0.85, 0.06), (0.45, 0.24), (0.15, 0.3),
+             (0.9, 0.25), (0.62, 0.3)]
+    for fx, fy in stars:
+        px = x + w * fx
+        py = y + h * fy
+        _disc(d, px, py, 1, WHITE)
+    moon_l = x + w - 52
+    moon_t = y + 8
+    d.ellipse([moon_l, moon_t, moon_l + 30, moon_t + 30], fill=(240, 235, 210))
     cx = x + w // 2
-    d.rectangle([cx - 9, y + 18, cx + 9, y + h - 30], fill=WHITE)
-    d.polygon([(cx - 9, y + 18), (cx + 9, y + 18), (cx, y + 2)], fill=RED)
-    d.polygon([(cx - 9, y + h - 30), (cx - 20, y + h - 16), (cx - 9, y + h - 22)],
-              fill=(200, 30, 36))
-    d.polygon([(cx + 9, y + h - 30), (cx + 20, y + h - 16), (cx + 9, y + h - 22)],
-              fill=(200, 30, 36))
-    d.ellipse([cx - 4, y + 30, cx + 4, y + 38], fill=(140, 200, 240))
-    d.polygon([(cx - 6, y + h - 30), (cx + 6, y + h - 30), (cx + 2, y + h - 8),
-               (cx - 2, y + h - 8)], fill=(250, 180, 60))
-    d.polygon([(cx - 3, y + h - 30), (cx + 3, y + h - 30), (cx, y + h - 16)],
-              fill=(250, 220, 120))
-    d.rectangle([x, y + h - 8, x + w, y + h], fill=(10, 16, 32))
-    for gx in (x + 20, x + 60, x + w - 70, x + w - 30):
-        d.ellipse([gx, y + h - 14, gx + 18, y + h - 4], fill=(120, 120, 130))
+    body_top = y + 18
+    body_bot = y + h - 30
+    _fill_rect(d, cx - 9, body_top, 18, body_bot - body_top, WHITE)
+    _poly(d, [(cx - 9, body_top), (cx + 9, body_top), (cx, y + 2)], RED)
+    _poly(d, [(cx - 9, body_bot), (cx - 20, body_bot + 14), (cx - 9, body_bot + 8)],
+          (200, 30, 36))
+    _poly(d, [(cx + 9, body_bot), (cx + 20, body_bot + 14), (cx + 9, body_bot + 8)],
+          (200, 30, 36))
+    _disc(d, cx, y + 34, 4, (140, 200, 240))
+    _poly(d, [(cx - 6, body_bot), (cx + 6, body_bot), (cx + 2, body_bot + 22),
+              (cx - 2, body_bot + 22)], (250, 180, 60))
+    _poly(d, [(cx - 3, body_bot), (cx + 3, body_bot), (cx, body_bot + 14)],
+          (250, 220, 120))
+    _fill_rect(d, x, y + h - 8, w, 8, (10, 16, 32))
+    ground_y = y + h
+    for off in (20, 60, w - 70, w - 30):
+        gx = x + off
+        d.ellipse([gx, ground_y - 14, gx + 18, ground_y - 4], fill=(120, 120, 130))
 
 
 def _draw_tariff(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(214, 226, 235))
-    d.rectangle([x, y + int(h * 0.72), x + w, y + h], fill=(40, 80, 130))
+    _fill_rect(d, x, y, w, h, (214, 226, 235))
+    band = y + int(h * 0.72)
+    _fill_rect(d, x, band, w, y + h - band, (40, 80, 130))
+    stripe_y = y + int(h * 0.78)
     for i in range(5):
-        d.line([x + i * 64, y + int(h * 0.78), x + i * 64 + 30, y + int(h * 0.72)],
-               fill=(255, 255, 255), width=2)
+        _seg(d, x + i * 64, stripe_y, x + i * 64 + 30, band, WHITE, 2)
     cols = [(176, 30, 36), (20, 38, 74), (196, 110, 20), (34, 120, 60)]
     for i, col in enumerate(cols):
         bx = x + 14 + i * 76
-        d.rectangle([bx, y + 34, bx + 66, y + 58], fill=col)
-        d.rectangle([bx, y + 60, bx + 66, y + 72], fill=col)
+        _fill_rect(d, bx, y + 34, 66, 24, col)
+        _fill_rect(d, bx, y + 60, 66, 12, col)
         for vx in range(bx + 8, bx + 62, 10):
-            d.line([vx, y + 36, vx, y + 56], fill=(255, 255, 255), width=1)
-    d.rectangle([x + w - 64, y + 6, x + w - 10, y + 30], fill=GOLD)
-    d.text((x + w - 37, y + 18), "%", font=_font(16, "sans_bold"), fill=WHITE, anchor="mm")
+            _seg(d, vx, y + 36, vx, y + 56, WHITE)
+    badge_l = x + w - 64
+    _fill_rect(d, badge_l, y + 6, 54, 24, GOLD)
+    d.text((badge_l + 27, y + 18), "%", font=_font(16, "sans_bold"), fill=WHITE, anchor="mm")
 
 
 def _draw_blast(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(30, 26, 24))
-    cx, cy = x + w // 2, y + int(h * 0.52)
-    for r, col in ((46, (250, 120, 40)), (36, (250, 170, 60)), (26, (250, 210, 90)),
-                   (16, (255, 240, 180))):
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col)
+    _fill_rect(d, x, y, w, h, (30, 26, 24))
+    cx = x + w // 2
+    cy = y + int(h * 0.52)
+    rings = [(46, (250, 120, 40)), (36, (250, 170, 60)),
+             (26, (250, 210, 90)), (16, (255, 240, 180))]
+    for r, col in rings:
+        _disc(d, cx, cy, r, col)
     for i, ang in enumerate(range(0, 360, 30)):
         a = math.radians(ang)
-        outer = 62 if i % 2 == 0 else 52
+        reach = 62 if i % 2 == 0 else 52
         x1 = cx + int(48 * math.cos(a))
         y1 = cy + int(48 * math.sin(a))
-        x2 = cx + int(outer * math.cos(a))
-        y2 = cy + int(outer * math.sin(a))
-        d.line([x1, y1, x2, y2], fill=(250, 180, 60), width=3)
-    d.rectangle([x, y + h - 14, x + w, y + h], fill=(120, 100, 80))
-    for gx, gy, gr in ((0.12, 0.82, 14), (0.3, 0.88, 18), (0.7, 0.86, 16), (0.88, 0.8, 13)):
-        d.ellipse([x + int(w * gx) - gr, y + int(h * gy) - gr // 2,
-                   x + int(w * gx) + gr, y + int(h * gy) + gr // 2], fill=(150, 140, 130))
+        x2 = cx + int(reach * math.cos(a))
+        y2 = cy + int(reach * math.sin(a))
+        _seg(d, x1, y1, x2, y2, (250, 180, 60), 3)
+    _fill_rect(d, x, y + h - 14, w, 14, (120, 100, 80))
+    mounds = [(0.12, 0.82, 14), (0.3, 0.88, 18), (0.7, 0.86, 16), (0.88, 0.8, 13)]
+    for fx, fy, gr in mounds:
+        mx = x + int(w * fx)
+        my = y + int(h * fy)
+        d.ellipse([mx - gr, my - gr // 2, mx + gr, my + gr // 2], fill=(150, 140, 130))
 
 
 LEAD_ART = {"rocket": _draw_rocket, "tariff": _draw_tariff, "blast": _draw_blast}
 
 
-def _pic_chart_down(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(238, 232, 222))
-    heights = [0.7, 0.55, 0.42, 0.3]
+def _bar_series(d, x, y, w, h, fracs, colour):
     bw = w / 4
-    for i, frac in enumerate(heights):
-        bx0 = x + i * bw
+    base = y + h - 2
+    for i, frac in enumerate(fracs):
+        left = x + i * bw + 4
         top = y + h - int(h * frac) - 2
-        d.rectangle([bx0 + 4, top, bx0 + bw - 4, y + h - 2], fill=RED)
-    d.line([x + 4, y + 4, x + w - 4, y + h - 6], fill=NAVY, width=2)
-    d.polygon([(x + w - 4, y + h - 6), (x + w - 12, y + h - 8), (x + w - 6, y + h - 14)],
-              fill=NAVY)
+        _fill_rect(d, left, top, bw - 8, base - top, colour)
+
+
+def _diag_arrow(d, x, y, w, h, colour, rising):
+    if rising:
+        x1, y1 = x + 4, y + h - 6
+        x2, y2 = x + w - 4, y + 4
+        head = [(x2, y2), (x2 - 8, y2 - 2), (x2 - 2, y2 + 8)]
+    else:
+        x1, y1 = x + 4, y + 4
+        x2, y2 = x + w - 4, y + h - 6
+        head = [(x2, y2), (x2 - 8, y2 - 2), (x2 - 2, y2 - 8)]
+    _seg(d, x1, y1, x2, y2, colour, 2)
+    _poly(d, head, colour)
+
+
+def _pic_chart_down(d, x, y, w, h):
+    _fill_rect(d, x, y, w, h, (238, 232, 222))
+    _bar_series(d, x, y, w, h, [0.7, 0.55, 0.42, 0.3], RED)
+    _diag_arrow(d, x, y, w, h, NAVY, False)
 
 
 def _pic_flag(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(232, 238, 242))
-    d.line([x + 10, y + 2, x + 10, y + h], fill=(90, 90, 96), width=2)
-    d.polygon([(x + 10, y + 3), (x + w - 14, y + 3), (x + w - 14, y + 13),
-               (x + 10, y + 13)], fill=(20, 60, 140))
-    d.polygon([(x + 10, y + 13), (x + w - 14, y + 13), (x + w - 14, y + 23),
-               (x + 10, y + 23)], fill=(30, 120, 60))
-    d.line([x + 10, y + 13, x + w - 14, y + 3], fill=(250, 210, 90), width=2)
-    for sx, sy in ((0.35, 0.3), (0.5, 0.22), (0.62, 0.32)):
-        d.ellipse([x + int(w * sx) - 1, y + int(h * sy) - 1,
-                   x + int(w * sx) + 1, y + int(h * sy) + 1], fill=WHITE)
+    _fill_rect(d, x, y, w, h, (232, 238, 242))
+    pole = x + 10
+    edge = x + w - 14
+    _seg(d, pole, y + 2, pole, y + h, (90, 90, 96), 2)
+    _poly(d, [(pole, y + 3), (edge, y + 3), (edge, y + 13), (pole, y + 13)], (20, 60, 140))
+    _poly(d, [(pole, y + 13), (edge, y + 13), (edge, y + 23), (pole, y + 23)], (30, 120, 60))
+    _seg(d, pole, y + 13, edge, y + 3, (250, 210, 90), 2)
+    for fx, fy in ((0.35, 0.3), (0.5, 0.22), (0.62, 0.32)):
+        _disc(d, x + int(w * fx), y + int(h * fy), 1, WHITE)
 
 
 def _pic_heart(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(251, 236, 236))
-    cx, cy = x + w // 2, y + h // 2 + 2
-    d.ellipse([cx - 11, cy - 8, cx - 1, cy + 2], fill=RED)
-    d.ellipse([cx + 1, cy - 8, cx + 11, cy + 2], fill=RED)
-    d.polygon([(cx - 11, cy - 2), (cx + 11, cy - 2), (cx, cy + 10)], fill=RED)
+    _fill_rect(d, x, y, w, h, (251, 236, 236))
+    cx = x + w // 2
+    cy = y + h // 2 + 2
+    _disc(d, cx - 6, cy - 3, 5, RED)
+    _disc(d, cx + 6, cy - 3, 5, RED)
+    _poly(d, [(cx - 11, cy - 2), (cx + 11, cy - 2), (cx, cy + 10)], RED)
     d.ellipse([cx - 4, cy - 6, cx + 4, cy + 1], fill=(255, 120, 120))
 
 
 def _pic_bars(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(238, 232, 222))
-    heights = [0.3, 0.45, 0.58, 0.75]
-    bw = w / 4
-    for i, frac in enumerate(heights):
-        bx0 = x + i * bw
-        top = y + h - int(h * frac) - 2
-        d.rectangle([bx0 + 4, top, bx0 + bw - 4, y + h - 2], fill=NAVY)
-    d.line([x + 4, y + h - 6, x + w - 4, y + 4], fill=GOLD, width=2)
-    d.polygon([(x + w - 4, y + 4), (x + w - 12, y + 2), (x + w - 6, y + 12)], fill=GOLD)
+    _fill_rect(d, x, y, w, h, (238, 232, 222))
+    _bar_series(d, x, y, w, h, [0.3, 0.45, 0.58, 0.75], NAVY)
+    _diag_arrow(d, x, y, w, h, GOLD, True)
 
 
 def _pic_memorial(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(226, 226, 220))
-    for i, cx in enumerate((0.2, 0.4, 0.6, 0.8)):
-        px = x + int(w * cx)
-        d.rectangle([px - 1, y + 6, px + 1, y + h - 4], fill=(90, 88, 80))
-        d.rectangle([px - 5, y + 9, px + 5, y + 12], fill=(90, 88, 80))
-    d.line([x, y + h - 3, x + w, y + h - 3], fill=(60, 90, 60), width=2)
+    _fill_rect(d, x, y, w, h, (226, 226, 220))
+    for fx in (0.2, 0.4, 0.6, 0.8):
+        px = x + int(w * fx)
+        _fill_rect(d, px - 1, y + 6, 2, h - 10, (90, 88, 80))
+        _fill_rect(d, px - 5, y + 9, 10, 3, (90, 88, 80))
+    _seg(d, x, y + h - 3, x + w, y + h - 3, (60, 90, 60), 2)
 
 
 def _pic_gavel(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(238, 236, 228))
-    d.rectangle([x + 14, y + 6, x + 44, y + 14], fill=(120, 84, 50))
-    d.rectangle([x + 44, y + 9, x + w - 16, y + 12], fill=(150, 110, 70))
-    d.rectangle([x + 20, y + 18, x + w - 20, y + 22], fill=(90, 70, 50))
-    d.rectangle([x + w - 30, y + 4, x + w - 22, y + 12], fill=GOLD)
+    _fill_rect(d, x, y, w, h, (238, 236, 228))
+    _fill_rect(d, x + 14, y + 6, 30, 8, (120, 84, 50))
+    _fill_rect(d, x + 44, y + 9, w - 60, 3, (150, 110, 70))
+    _fill_rect(d, x + 20, y + 18, w - 40, 4, (90, 70, 50))
+    _fill_rect(d, x + w - 30, y + 4, 8, 8, GOLD)
 
 
 def _pic_chart_up(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(238, 232, 222))
-    heights = [0.3, 0.45, 0.58, 0.75]
-    bw = w / 4
-    for i, frac in enumerate(heights):
-        bx0 = x + i * bw
-        top = y + h - int(h * frac) - 2
-        d.rectangle([bx0 + 4, top, bx0 + bw - 4, y + h - 2], fill=(34, 120, 60))
-    d.line([x + 4, y + h - 6, x + w - 4, y + 4], fill=NAVY, width=2)
-    d.polygon([(x + w - 4, y + 4), (x + w - 12, y + 2), (x + w - 6, y + 12)], fill=NAVY)
+    _fill_rect(d, x, y, w, h, (238, 232, 222))
+    _bar_series(d, x, y, w, h, [0.3, 0.45, 0.58, 0.75], (34, 120, 60))
+    _diag_arrow(d, x, y, w, h, NAVY, True)
 
 
 def _pic_ship(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(16, 40, 70))
-    d.polygon([(x + 8, y + 16), (x + w - 8, y + 16), (x + w - 20, y + h - 4),
-               (x + 20, y + h - 4)], fill=(120, 40, 30))
-    for i, col in enumerate(((250, 210, 90), (220, 220, 220), (200, 60, 40))):
+    _fill_rect(d, x, y, w, h, (16, 40, 70))
+    hull_top = y + 16
+    hull_bot = y + h - 4
+    _poly(d, [(x + 8, hull_top), (x + w - 8, hull_top),
+              (x + w - 20, hull_bot), (x + 20, hull_bot)], (120, 40, 30))
+    crates = [(250, 210, 90), (220, 220, 220), (200, 60, 40)]
+    for i, col in enumerate(crates):
         bx = x + 22 + i * 30
-        d.rectangle([bx, y + 6, bx + 24, y + 16], fill=col)
+        _fill_rect(d, bx, y + 6, 24, 10, col)
+    wave_y = y + h - 2
     for wx in range(x + 4, x + w - 4, 18):
-        d.line([wx, y + h - 2, wx + 10, y + h - 2], fill=(140, 200, 240), width=1)
+        _seg(d, wx, wave_y, wx + 10, wave_y, (140, 200, 240))
 
 
 def _pic_flame(d, x, y, w, h):
-    d.rectangle([x, y, x + w, y + h], fill=(30, 30, 34))
-    for tx in (x + 8, x + 30, x + 52):
-        d.rectangle([tx, y + 10, tx + 6, y + h - 4], fill=(120, 120, 126))
-        d.rectangle([tx - 2, y + 8, tx + 8, y + 10], fill=(90, 90, 96))
+    _fill_rect(d, x, y, w, h, (30, 30, 34))
+    base = y + h - 4
+    for off in (8, 30, 52):
+        tx = x + off
+        _fill_rect(d, tx, y + 10, 6, base - (y + 10), (120, 120, 126))
+        _fill_rect(d, tx - 2, y + 8, 10, 2, (90, 90, 96))
     cx = x + w - 40
-    d.polygon([(cx - 12, y + h - 2), (cx - 4, y + 4), (cx + 2, y + 12),
-               (cx + 8, y + 2), (cx + 14, y + h - 2)], fill=(250, 120, 40))
-    d.polygon([(cx - 6, y + h - 2), (cx, y + 10), (cx + 6, y + h - 2)], fill=(250, 210, 90))
+    floor = y + h - 2
+    _poly(d, [(cx - 12, floor), (cx - 4, y + 4), (cx + 2, y + 12),
+              (cx + 8, y + 2), (cx + 14, floor)], (250, 120, 40))
+    _poly(d, [(cx - 6, floor), (cx, y + 10), (cx + 6, floor)], (250, 210, 90))
 
 
 PIC_ART = {
@@ -499,6 +563,120 @@ PIC_ART = {
     "bars": _pic_bars, "memorial": _pic_memorial, "gavel": _pic_gavel,
     "chart_up": _pic_chart_up, "ship": _pic_ship, "flame": _pic_flame,
 }
+
+
+def _draw_lead(d, lead, lx, lead_w):
+    LEAD_ART[lead["art"]](d, lx, 222, lead_w, 100)
+    d.rectangle([lx, 222, lx + lead_w, 322], outline=NAVY, width=1)
+    kfont = _font(9, "sans_bold")
+    kw = int(kfont.getlength(lead["kicker"])) + 10
+    _fill_rect(d, lx, 222, kw, 14, RED)
+    d.text((lx + 5, 229), lead["kicker"], font=kfont, fill=WHITE, anchor="lm")
+    y = 328
+    num_text = str(lead["num"])
+    num_face = _font(11, "sans_bold")
+    num_w = int(num_face.getlength(num_text))
+    d.text((lx, y), num_text, font=num_face, fill=RED, anchor="la")
+    span = _tag_span(lead["tag"])
+    _tag_chip(d, lx + lead_w - span, y, lead["tag"], TAG_COLOURS[lead["tag"]])
+    place_face = _font(10, "sans_bold")
+    place = "%s \u00b7 %s" % (lead["place"], lead["beat"])
+    place = _trunc_one(place, place_face, lead_w - num_w - 6 - span - 8)
+    d.text((lx + num_w + 6, y), place, font=place_face, fill=NAVY, anchor="la")
+    y += 18
+    head_face = _font(16, "serif_bold")
+    for line in _fit_lines(lead["headline"], head_face, lead_w, 2):
+        d.text((lx, y), line, font=head_face, fill=INK, anchor="la")
+        y += 19
+    y += 2
+    deck_face = _font(11, "sans")
+    for line in _fit_lines(lead["deck"], deck_face, lead_w, 3):
+        d.text((lx, y), line, font=deck_face, fill=INK, anchor="la")
+        y += 13
+    y += 3
+    d.text((lx, y), "Sources: " + lead["source"], font=_font(9, "sans"), fill=GREY, anchor="la")
+
+
+def _draw_card(d, card, cx, cy, cw):
+    d.rectangle([cx, cy, cx + cw, cy + 130], fill=WHITE, outline=RULE, width=1)
+    PIC_ART[card["art"]](d, cx + 1, cy + 1, cw - 2, 26)
+    _seg(d, cx, cy + 27, cx + cw, cy + 27, RULE)
+    _disc(d, cx + 13, cy + 13, 9, NAVY)
+    num_face = _font(11, "sans_bold")
+    d.text((cx + 13, cy + 13), str(card["num"]), font=num_face, fill=WHITE, anchor="mm")
+    py = cy + 32
+    span = _tag_span(card["tag"])
+    _tag_chip(d, cx + cw - 6 - span, py, card["tag"], TAG_COLOURS[card["tag"]])
+    place_face = _font(9, "sans_bold")
+    place = "%s \u00b7 %s" % (card["place"], card["beat"])
+    place = _trunc_one(place, place_face, cw - 12 - span - 4)
+    d.text((cx + 6, py), place, font=place_face, fill=NAVY, anchor="la")
+    hy = cy + 48
+    head_face = _font(12, "sans_bold")
+    for line in _fit_lines(card["headline"], head_face, cw - 12, 2):
+        d.text((cx + 6, hy), line, font=head_face, fill=INK, anchor="la")
+        hy += 13
+    dy = cy + 78
+    deck_face = _font(10, "sans")
+    for line in _fit_lines(card["deck"], deck_face, cw - 12, 2):
+        d.text((cx + 6, dy), line, font=deck_face, fill=GREY, anchor="la")
+        dy += 11
+    d.text((cx + 6, cy + 114), card["source"], font=_font(8, "sans"), fill=GREY, anchor="la")
+
+
+def _draw_map(d, mx, my, mw, mh):
+    d.rectangle([mx, my, mx + mw, my + mh], fill=MAP_SKY, outline=RULE, width=1)
+
+    def project(lon, lat):
+        px = mx + (lon + 180) / 360.0 * mw
+        py = my + (84 - lat) / 144.0 * mh
+        return (px, py)
+
+    for poly in CONTINENTS:
+        pts = [project(lon, lat) for lon, lat in poly]
+        _poly(d, pts, MAP_LAND)
+        _polyline(d, pts, MAP_LINE)
+    for num, lon, lat, nx, ny in DOTS:
+        px, py = project(lon, lat)
+        px += nx
+        py += ny
+        # Two-digit stories get the bigger pin; the number sits inside
+        # the pin, so it is clamped along with it.
+        big = num >= 10
+        r = 4 + big
+        px = min(max(px, mx + r + 2), mx + mw - r - 2)
+        py = min(max(py, my + r + 2), my + mh - r - 2)
+        _ring_disc(d, px, py, r, RED, NAVY)
+        d.text((px, py), str(num), font=_font(7 + big, "sans_bold"), fill=WHITE, anchor="mm")
+
+
+def _draw_date_check(d, dc_x, my):
+    panel_w = 638
+    d.rectangle([dc_x, my, dc_x + panel_w, my + 100], fill=RED_TINT, outline=RED, width=1)
+    _fill_rect(d, dc_x, my, 92, 100, RED)
+    label_face = _font(11, "sans_bold")
+    mid_x = dc_x + 46
+    d.text((mid_x, my + 38), "DATE", font=label_face, fill=WHITE, anchor="mm")
+    d.text((mid_x, my + 56), "CHECK", font=label_face, fill=WHITE, anchor="mm")
+    body_face = _font(10, "sans")
+    dy = my + 5
+    for line in _fit_lines(DATE_CHECK_TEXT, body_face, panel_w - 92 - 18, 7):
+        d.text((dc_x + 102, dy), line, font=body_face, fill=INK, anchor="la")
+        dy += 13
+
+
+def _draw_brief(d, brief, bx, by, bw):
+    num, place, body, source, _region = brief
+    num_text = "%d." % num
+    nfont = _font(9, "sans_bold")
+    d.text((bx, by), num_text, font=nfont, fill=RED, anchor="la")
+    tx = bx + int(nfont.getlength(num_text)) + 4
+    text = "%s: %s (%s)" % (place, body, source)
+    body_face = _font(9, "sans")
+    ly = by
+    for line in _fit_lines(text, body_face, bx + bw - tx, 2):
+        d.text((tx, ly), line, font=body_face, fill=INK, anchor="la")
+        ly += 10
 
 
 # ---------------------------------------------------------------- page build
@@ -510,194 +688,99 @@ def build_page():
     d = ImageDraw.Draw(img)
 
     # Top bar
-    d.rectangle([0, 0, W, 20], fill=NAVY)
-    bar_font = _font(10, "sans_bold")
-    d.text((M, 10), "THE WORLD IN ONE DAY", font=bar_font, fill=CREAM, anchor="lm")
-    d.text((RIGHT, 10), "ONE PAGE \u00b7 ALL THE NEWS", font=bar_font, fill=CREAM, anchor="rm")
+    _fill_rect(d, 0, 0, W, 20, NAVY)
+    bar_face = _font(10, "sans_bold")
+    d.text((M, 10), "THE WORLD IN ONE DAY", font=bar_face, fill=CREAM, anchor="lm")
+    d.text((RIGHT, 10), "ONE PAGE \u00b7 ALL THE NEWS", font=bar_face, fill=CREAM, anchor="rm")
 
     # Masthead title: largest size at/below 60 that fits
     title = "Wednesday 25 November 2026"
     size = 60
-    while size > 30 and _font(size, "serif_bold").getlength(title) > CW:
+    face = _font(size, "serif_bold")
+    while size > 30 and face.getlength(title) > CW:
         size -= 1
-    d.text((W // 2, 24), title, font=_font(size, "serif_bold"), fill=NAVY, anchor="ma")
+        face = _font(size, "serif_bold")
+    d.text((W // 2, 24), title, font=face, fill=NAVY, anchor="ma")
     d.text((W // 2, 86), SUB_LINE, font=_font(15, "serif_italic"), fill=RED, anchor="ma")
     d.text((W // 2, 103), STATS_LINE, font=_font(12, "sans_bold"), fill=NAVY, anchor="ma")
-    d.rectangle([M, 118, RIGHT, 120], fill=NAVY)
+    _fill_rect(d, M, 118, CW, 2, NAVY)
 
     # Numbers strip y 124-164
-    box_w = (CW - 18) // 4
-    for i, (value, label) in enumerate(NUMBERS):
-        bx = M + i * (box_w + 6)
-        bw = box_w if i < 3 else CW - 3 * (box_w + 6)
+    for (bx, bw), (value, label) in zip(_slot_row(CW, 4, 6, M), NUMBERS):
         d.rectangle([bx, 124, bx + bw, 164], fill=PAPER_DARK, outline=RULE, width=1)
-        d.text((bx + bw // 2, 130), value, font=_font(20, "sans_bold"), fill=RED, anchor="ma")
-        d.text((bx + bw // 2, 150), label, font=_font(9, "sans"), fill=GREY, anchor="ma")
+        mid = bx + bw // 2
+        d.text((mid, 130), value, font=_font(20, "sans_bold"), fill=RED, anchor="ma")
+        d.text((mid, 150), label, font=_font(9, "sans"), fill=GREY, anchor="ma")
 
     # Region strip y 174-192
-    seg_w = CW // 6
-    for i, (name, count) in enumerate(REGIONS):
-        sx = M + i * seg_w
-        sw = seg_w if i < 5 else CW - 5 * seg_w
-        d.rectangle([sx, 174, sx + sw, 192], fill=REGION_COLOURS[name])
+    for (sx, sw), (name, count) in zip(_slot_row(CW, 6, 0, M), REGIONS):
+        _fill_rect(d, sx, 174, sw, 18, REGION_COLOURS[name])
         d.text((sx + sw // 2, 183), "%s %d" % (name, count), font=_font(11, "sans_bold"),
                fill=WHITE, anchor="mm")
 
     # UTC strip y 198-214
-    d.rectangle([M, 198, M + 108, 214], fill=NAVY)
+    _fill_rect(d, M, 198, 108, 16, NAVY)
     d.text((M + 54, 206), "THE DAY IN UTC", font=_font(10, "sans_bold"), fill=WHITE, anchor="mm")
     utc_line = "  \u00b7  ".join(UTC_EVENTS)
     d.text((M + 116, 206), utc_line, font=_font(10, "sans"), fill=INK, anchor="lm")
 
     # Leads y 222: art 100 tall, then text
     lead_w = (CW - 20) // 3
+    step = lead_w + 10
     for i, lead in enumerate(LEADS):
-        lx = M + i * (lead_w + 10)
-        LEAD_ART[lead["art"]](d, lx, 222, lead_w, 100)
-        d.rectangle([lx, 222, lx + lead_w, 322], outline=NAVY, width=1)
-        kfont = _font(9, "sans_bold")
-        kw = int(kfont.getlength(lead["kicker"])) + 10
-        d.rectangle([lx, 222, lx + kw, 236], fill=RED)
-        d.text((lx + 5, 229), lead["kicker"], font=kfont, fill=WHITE, anchor="lm")
-        y = 328
-        num_text = str(lead["num"])
-        num_w = int(_font(11, "sans_bold").getlength(num_text))
-        d.text((lx, y), num_text, font=_font(11, "sans_bold"), fill=RED, anchor="la")
-        chip_w = _chip_width(lead["tag"])
-        _chip(d, lx + lead_w - chip_w, y, lead["tag"], TAG_COLOURS[lead["tag"]])
-        place = "%s \u00b7 %s" % (lead["place"], lead["beat"])
-        place_w = lead_w - num_w - 6 - chip_w - 8
-        place = _trunc_one(place, _font(10, "sans_bold"), place_w)
-        d.text((lx + num_w + 6, y), place, font=_font(10, "sans_bold"), fill=NAVY, anchor="la")
-        y += 18
-        head_lines = _fit_lines(lead["headline"], _font(16, "serif_bold"), lead_w, 2)
-        for line in head_lines:
-            d.text((lx, y), line, font=_font(16, "serif_bold"), fill=INK, anchor="la")
-            y += 19
-        y += 2
-        deck_lines = _fit_lines(lead["deck"], _font(11, "sans"), lead_w, 3)
-        for line in deck_lines:
-            d.text((lx, y), line, font=_font(11, "sans"), fill=INK, anchor="la")
-            y += 13
-        y += 3
-        d.text((lx, y), "Sources: " + lead["source"], font=_font(9, "sans"), fill=GREY, anchor="la")
+        _draw_lead(d, lead, M + i * step, lead_w)
 
     # THE DAY IN NINE
     d.text((M, 452), "THE DAY IN NINE", font=_font(15, "serif_bold"), fill=NAVY, anchor="la")
     d.text((RIGHT, 452), "THE STORIES THAT MOVED THE WORLD TODAY",
            font=_font(10, "sans_bold"), fill=GREY, anchor="ra")
-    d.rectangle([M, 470, RIGHT, 472], fill=GOLD)
-
-    def draw_card(card, cx, cy, cw):
-        d.rectangle([cx, cy, cx + cw, cy + 130], fill=WHITE, outline=RULE, width=1)
-        PIC_ART[card["art"]](d, cx + 1, cy + 1, cw - 2, 26)
-        d.line([cx, cy + 27, cx + cw, cy + 27], fill=RULE, width=1)
-        d.ellipse([cx + 4, cy + 4, cx + 22, cy + 22], fill=NAVY)
-        d.text((cx + 13, cy + 13), str(card["num"]), font=_font(11, "sans_bold"),
-               fill=WHITE, anchor="mm")
-        py = cy + 32
-        chip_w = _chip_width(card["tag"])
-        _chip(d, cx + cw - 6 - chip_w, py, card["tag"], TAG_COLOURS[card["tag"]])
-        place = "%s \u00b7 %s" % (card["place"], card["beat"])
-        place = _trunc_one(place, _font(9, "sans_bold"), cw - 12 - chip_w - 4)
-        d.text((cx + 6, py), place, font=_font(9, "sans_bold"), fill=NAVY, anchor="la")
-        hy = cy + 48
-        head_lines = _fit_lines(card["headline"], _font(12, "sans_bold"), cw - 12, 2)
-        for line in head_lines:
-            d.text((cx + 6, hy), line, font=_font(12, "sans_bold"), fill=INK, anchor="la")
-            hy += 13
-        dy = cy + 78
-        deck_lines = _fit_lines(card["deck"], _font(10, "sans"), cw - 12, 2)
-        for line in deck_lines:
-            d.text((cx + 6, dy), line, font=_font(10, "sans"), fill=GREY, anchor="la")
-            dy += 11
-        d.text((cx + 6, cy + 114), card["source"], font=_font(8, "sans"), fill=GREY, anchor="la")
+    _fill_rect(d, M, 470, CW, 2, GOLD)
 
     for i, card in enumerate(NINE[:5]):
-        draw_card(card, M + i * (188 + 8), 476, 188)
+        _draw_card(d, card, M + i * (188 + 8), 476, 188)
     row1_w = (CW - 24) // 4
     for i, card in enumerate(NINE[5:]):
-        draw_card(card, M + i * (row1_w + 8), 618, row1_w)
+        _draw_card(d, card, M + i * (row1_w + 8), 618, row1_w)
 
     # WHERE IT HAPPENED / DATE CHECK
-    d.text((M, 764), "WHERE IT HAPPENED", font=_font(13, "serif_bold"), fill=NAVY, anchor="la")
+    head_face = _font(13, "serif_bold")
+    d.text((M, 764), "WHERE IT HAPPENED", font=head_face, fill=NAVY, anchor="la")
     dc_x = M + 338
-    d.text((dc_x, 764), "DATE CHECK", font=_font(13, "serif_bold"), fill=NAVY, anchor="la")
-    mx, my, mw, mh = M, 778, 330, 100
-    d.rectangle([mx, my, mx + mw, my + mh], fill=MAP_SKY, outline=RULE, width=1)
-
-    def to_xy(lon, lat):
-        return (mx + (lon + 180) / 360.0 * mw, my + (84 - lat) / 144.0 * mh)
-
-    for poly in CONTINENTS:
-        pts = [to_xy(lon, lat) for lon, lat in poly]
-        d.polygon(pts, fill=MAP_LAND)
-        d.line(pts + [pts[0]], fill=MAP_LINE, width=1)
-    for num, lon, lat, nx, ny in DOTS:
-        px, py = to_xy(lon, lat)
-        px += nx
-        py += ny
-        r = 5 if num >= 10 else 4
-        # Clamp the whole pin (radius + 2 px margin) inside the frame so
-        # no pin ever touches or crosses the map border, whatever the
-        # nudge says. The number sits inside the pin, so it is clamped
-        # along with it.
-        px = min(max(px, mx + r + 2), mx + mw - r - 2)
-        py = min(max(py, my + r + 2), my + mh - r - 2)
-        d.ellipse([px - r, py - r, px + r, py + r], fill=RED, outline=NAVY, width=1)
-        d.text((px, py), str(num), font=_font(8 if num >= 10 else 7, "sans_bold"),
-               fill=WHITE, anchor="mm")
-
-    d.rectangle([dc_x, my, dc_x + 638, my + 100], fill=RED_TINT, outline=RED, width=1)
-    d.rectangle([dc_x, my, dc_x + 92, my + 100], fill=RED)
-    d.text((dc_x + 46, my + 38), "DATE", font=_font(11, "sans_bold"), fill=WHITE, anchor="mm")
-    d.text((dc_x + 46, my + 56), "CHECK", font=_font(11, "sans_bold"), fill=WHITE, anchor="mm")
-    dc_lines = _fit_lines(DATE_CHECK_TEXT, _font(10, "sans"), 638 - 92 - 18, 7)
-    dy = my + 5
-    for line in dc_lines:
-        d.text((dc_x + 102, dy), line, font=_font(10, "sans"), fill=INK, anchor="la")
-        dy += 13
+    d.text((dc_x, 764), "DATE CHECK", font=head_face, fill=NAVY, anchor="la")
+    _draw_map(d, M, 778, 330, 100)
+    _draw_date_check(d, dc_x, 778)
 
     # ALSO ON WEDNESDAY
     d.text((M, 892), "ALSO ON WEDNESDAY 25 NOVEMBER \u2014 8 MORE STORIES",
            font=_font(13, "serif_bold"), fill=NAVY, anchor="la")
 
-    def draw_brief(brief, bx, by, bw):
-        num, place, body, source, _region = brief
-        num_text = "%d." % num
-        nfont = _font(9, "sans_bold")
-        d.text((bx, by), num_text, font=nfont, fill=RED, anchor="la")
-        tx = bx + int(nfont.getlength(num_text)) + 4
-        text = "%s: %s (%s)" % (place, body, source)
-        lines = _fit_lines(text, _font(9, "sans"), bx + bw - tx, 2)
-        ly = by
-        for line in lines:
-            d.text((tx, ly), line, font=_font(9, "sans"), fill=INK, anchor="la")
-            ly += 10
-
     col_w = (CW - 24) // 4
+    step_x = col_w + 8
     for i, brief in enumerate(BRIEFS):
         row, col = divmod(i, 4)
-        draw_brief(brief, M + col * (col_w + 8), 908 + row * 32, col_w)
+        _draw_brief(d, brief, M + col * step_x, 908 + row * 32, col_w)
 
     # Footer
-    d.text((M, 992), FOOTER_1, font=_font(9, "sans"), fill=GREY, anchor="la")
-    d.text((M, 1006), FOOTER_2, font=_font(9, "sans"), fill=GREY, anchor="la")
+    foot_face = _font(9, "sans")
+    d.text((M, 992), FOOTER_1, font=foot_face, fill=GREY, anchor="la")
+    d.text((M, 1006), FOOTER_2, font=foot_face, fill=GREY, anchor="la")
 
     return img
 
 
 def main():
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or os.path.join(BASE, "out")
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR")
+    if not out_dir:
+        out_dir = os.path.join(BASE, "out")
     os.makedirs(out_dir, exist_ok=True)
     # Clear only the contents of the output folder, never the folder itself:
     # the grader fails with EACCES if the folder is missing.
     for name in os.listdir(out_dir):
         path = os.path.join(out_dir, name)
-        if os.path.isfile(path):
-            os.remove(path)
-        elif os.path.isdir(path):
+        if os.path.isdir(path):
             shutil.rmtree(path)
+        elif os.path.isfile(path):
+            os.remove(path)
     out_path = os.path.join(out_dir, "entry.png")
     try:
         from PIL import Image  # noqa: F401
